@@ -1,0 +1,10 @@
+openai>=1.0.0          # Official client for OpenAI + Azure OpenAI
+fastapi
+uvicorn
+python-dotenv
+httpx
+python-multipart
+faster-whisper
+langgraph
+pydantic
+azure-identity>=1.13.0
