@@ -7,13 +7,13 @@ import os
 import typing
 from typing import Optional, List, Dict, Any
 import hashlib
-import httpx 
+import httpx
 from dotenv import load_dotenv
 load_dotenv()
 # ---------- CONFIG / DEFAULTS ----------
 GITHUB_API = "https://api.github.com"
 GITHUB_TOKEN = os.getenv("GITHUB_TOKEN")
-GITHUB_REPO = os.getenv("GITHUB_REPO")      
+GITHUB_REPO = os.getenv("GITHUB_REPO")        
 DEFAULT_LABELS = [l.strip() for l in (os.getenv("GITHUB_DEFAULT_LABELS", "meeting,action-item").split(",")) if l.strip()]
 DEFAULT_ASSIGNEE = os.getenv("GITHUB_DEFAULT_ASSIGNEE")  # optional
 ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -21,7 +21,7 @@ ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # Optional: map owner names/emails -> GitHub usernames
 OWNER_MAP = {
-    "Mrinali":os.getenv("owner_name_1"),  
+    "mrinali":os.getenv("owner_name_1"),  
     "alice": os.getenv("owner_name_2"),            
     "bob": "bob-real-github-username",
 }
@@ -38,6 +38,54 @@ def _owner_to_assignees(owner: Optional[str]) -> Optional[List[str]]:
     gh_user = gh_user.strip()
     return [gh_user] if gh_user else None
 
+async def _github_create_or_get_issue(
+    title: str,
+    body: str,
+    labels: Optional[List[str]],
+    assignees: Optional[List[str]],
+    idempotency_key: Optional[str],
+) -> Dict[str, Any]:
+    """
+    Async helper (kept from your snippet) — used elsewhere if needed.
+    """
+    if not (GITHUB_TOKEN and GITHUB_REPO):
+        mock_url = f"https://github.com/mock/{title.lower().replace(' ', '-').replace(',', '')}"
+        return {"html_url": mock_url, "title": title}
+
+    headers = {
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
+        "Accept": "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+    }
+
+    idem = idempotency_key or hashlib.sha1(f"{title}|{body}|{assignees}".encode()).hexdigest()[:12]
+    idem_marker = f"<!-- idem:{idem} -->"
+    q = f'repo:{GITHUB_REPO} in:body "{idem}" is:issue'
+
+    async with httpx.AsyncClient(timeout=30) as client:
+        search = await client.get(f"{GITHUB_API}/search/issues", headers=headers, params={"q": q})
+        if search.status_code == 200:
+            items = (search.json() or {}).get("items") or []
+            if items:
+                return items[0]
+
+        owner, repo = GITHUB_REPO.split("/")
+        create_url = f"{GITHUB_API}/repos/{owner}/{repo}/issues"
+        final_body = (body or "").rstrip() + f"\n\n{idempotency_key and idem_marker or idem_marker}"
+        payload: Dict[str, Any] = {"title": title, "body": final_body}
+        if labels:
+            payload["labels"] = labels
+        if assignees:
+            payload["assignees"] = [a for a in assignees if a]
+
+        r = await client.post(create_url, headers=headers, json=payload)
+        if r.status_code not in (200, 201):
+            try:
+                detail = r.json()
+            except Exception:
+                detail = r.text
+            raise RuntimeError(f"GitHub create failed: {r.status_code} {detail}")
+        return r.json()
 
 def _github_create_or_get_issue_sync(
     title: str,
@@ -96,6 +144,7 @@ def create_issue_mock(title: str, body: str = "") -> str:
     return f"https://github.com/mock/{slug or 'issue'}"
 
 def maybe_parse_date(text: str) -> datetime | None:
+    """Very small date parser for demo. Recognizes 'today', 'tomorrow', 'next week', and weekdays."""
     t = (text or "").lower()
     now = datetime.utcnow().replace(hour=9, minute=0, second=0, microsecond=0)
     weekdays = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday']
@@ -117,7 +166,7 @@ def act_on_action_item(item: dict) -> dict:
     details = item.get("details", "")
     due = item.get("due_date")
     owner = item.get("owner")
-    idem = item.get("idempotency_key")  
+    idem = item.get("idempotency_key")  # if your caller sends one; safe if None
 
     ics_path = None
     when = None
@@ -131,7 +180,7 @@ def act_on_action_item(item: dict) -> dict:
     if when:
         ics_path = create_ics(title, when)
 
-    # Prepare GitHub issue body 
+    #GitHub issue body
     due_text = due or (when.strftime("%Y-%m-%d") if when else None) or "—"
     body = (details or "Task created from meeting insights.") + \
            f"\n\n**Owner**: {owner or 'Unassigned'}\n**Due**: {due_text}\n"

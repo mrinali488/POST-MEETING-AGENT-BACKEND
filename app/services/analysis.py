@@ -8,7 +8,7 @@ import re
 from typing import List, Optional
 from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo
-
+import random
 from pydantic import BaseModel
 
 
@@ -18,6 +18,7 @@ class ActionItem(BaseModel):
     due_date: Optional[str] = None    
     priority: Optional[str] = "medium"
     details: Optional[str] = None
+    task_id: Optional[str] = None
 
 class Insights(BaseModel):
     summary: str
@@ -185,8 +186,15 @@ Transcript:
 
     def normalize_keys(d):
         return {k.lower(): v for k, v in d.items()}
-
-    action_items = [ActionItem(**normalize_keys(item)) for item in data.get("action_items", [])]
+    action_items = []
+    for item in data.get("action_items", []):
+        norm = normalize_keys(item)
+        # Add task_id if not present or empty
+        if not norm.get("task_id"):
+            rand_digits = random.randint(1000, 9999)
+            norm["task_id"] = f"task-{rand_digits}"
+        action_items.append(ActionItem(**norm))
+    # action_items = [ActionItem(**normalize_keys(item)) for item in data.get("action_items", [])]
     return Insights(
         summary=data.get("summary", ""),
         decisions=data.get("decisions", []),
