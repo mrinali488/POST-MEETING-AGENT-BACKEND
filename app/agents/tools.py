@@ -21,8 +21,8 @@ ISO_DATE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # Optional: map owner names/emails -> GitHub usernames
 OWNER_MAP = {
-    "Mrinali":"mrinali488",  
-    "alice": "skyhawk14",            
+    "Mrinali":os.getenv("owner_name_1"),  
+    "alice": os.getenv("owner_name_2"),            
     "bob": "bob-real-github-username",
 }
 
