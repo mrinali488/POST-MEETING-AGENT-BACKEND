@@ -6,8 +6,8 @@ When you **upload an audio file** to `/ingest_audio`, a **Master Agent** runs th
 ```
 MasterAgent
   ├─ TranscriberAgent  (Whisper -> transcript)
-  ├─ AnalyzerAgent     (stub rules -> insights) 
-  └─ TaskCalendarAgent (mock issue + .ics event)
+  ├─ AnalyzerAgent     (Azure Open AI -> insights) 
+  └─ TaskCalendarAgent (github issue + .ics event)
 ```
 
 > Works : the analyzer is a stub Azure OpenAI. You will need Azure Open ai keys for this
@@ -22,7 +22,7 @@ python -m venv .venv
 #Activate vrtual environment
 #for Windows: .venv\Scripts\activate
 #for mac: source .venv/bin/activate
-#Install req
+#Install requirments
 pip install -r requirements.txt
 #create .env file with the azure open ai ,github task keys and values
 #start the app
@@ -41,7 +41,7 @@ curl -s http://127.0.0.1:8000/health
 curl -s -X POST "http://127.0.0.1:8000/ingest_audio"   -F "file=@/path/to/your/meeting.wav" | jq
 ```
 
-### Fallback: Text-only endpoints (still available)
+### Fallback: Text-only endpoints
 ```bash
 curl -s -X POST http://127.0.0.1:8000/analyze_text   -H "Content-Type: application/json" -d @synthetic_transcript.json | jq
 
@@ -51,7 +51,7 @@ curl -s -X POST http://127.0.0.1:8000/act_on_text   -H "Content-Type: applicatio
 ### What you’ll see
 - `transcript` from Whisper
 - `insights` with `summary`, `decisions[]`, `action_items[]`
-- `actions[]` where each item has `issue_url` (MOCK) and an `ics_path` saved under `app/tmp/`
+- `actions[]` where each item has a create Option. Once Created`issue_url` will be displayed and an `ics_path` saved under `app/tmp/`
 
 ---
 
